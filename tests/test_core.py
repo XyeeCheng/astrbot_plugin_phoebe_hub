@@ -58,6 +58,10 @@ class StoreTests(unittest.TestCase):
         self.turn(eid="2")
         self.assertEqual(self.store.status("a")["score"], 21)
 
+    def test_emoji_only_does_not_gain(self):
+        self.turn("😀😀😀😀😀😀")
+        self.assertEqual(self.store.status("a")["score"], 20)
+
     def test_failed_send_does_not_gain(self):
         self.store.begin("a", "1", "今天想看比赛呀")
         self.store.finish("a", "1", "failed")

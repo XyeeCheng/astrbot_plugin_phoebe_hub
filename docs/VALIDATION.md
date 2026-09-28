@@ -4,7 +4,7 @@
 
 ## 已验证
 
-- 核心与Bridge自动测试：46项，Windows Python3.12、Ubuntu Python3.12通过。
+- 核心与Bridge自动测试：47项，Windows Python3.12、Ubuntu Python3.12通过。
 - 已安装AstrBot4.28.1框架内集成测试：20项，覆盖真实消息对象、加载/重载、命令、身份隔离、发送失败、主动聊天适配/卸载、表情及真实工具循环。
 - 原生工具循环测试使用AstrBot真实 `Context.tool_loop_agent`，模型和比分工具为本地假实现；验证两次模型调用、一轮工具执行、一次最终发送，不代表真实赛果查询成功。
 - DSH SDK/runtime 0.1.5rc1，在Windows与Ubuntu均实测加载本项目JS插件、枚举仅一个只读时间工具、完成工具调用和最终回答。模型端为本地模拟HTTP接口。

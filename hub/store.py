@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import sqlite3
 import time
 from contextlib import closing
@@ -134,7 +135,7 @@ class Store:
             duplicate_text = self.db.execute(
                 "SELECT 1 FROM turns WHERE scope=? AND digest=? AND eid!=? AND created>? LIMIT 1",
                 (scope, turn["digest"], eid, now - 86400)).fetchone()
-            eligible = (turn["kind"] == "normal" and len(turn["body"]) >= 4 and not duplicate_text
+            eligible = (turn["kind"] == "normal" and len(re.findall(r"[\u4e00-\u9fffA-Za-z0-9]", turn["body"])) >= 4 and not duplicate_text
                         and turn["body"].strip() not in ("你好呀", "晚上好呀", "早上好呀")
                         and row["gained"] < s.daily_gain
                         and (not row["last_gain"] or now - row["last_gain"] >= s.gain_cooldown))
