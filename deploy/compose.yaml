@@ -9,7 +9,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,size=256m
-      - /home/phoebe/.cache:rw,nosuid,nodev,uid=10001,gid=10001,size=128m
+      - /home/phoebe/.cache:rw,exec,nosuid,nodev,uid=10001,gid=10001,size=128m
     security_opt:
       - no-new-privileges:true
     cap_drop:

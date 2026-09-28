@@ -38,6 +38,8 @@ docker compose --env-file .env -f compose.yaml up -d --build
 
 Compose复用现有网络，不发布公网端口，不挂载宿主机目录或Docker socket。资源限制为起始配置：单并发、768MB、1CPU；生产机器资源需现场核对，不宣称该值适合所有主机。
 
+DSH打包运行时会解压原生动态库，`/home/phoebe/.cache` 使用独立128MB内存挂载，允许加载动态库；容器其余根文件系统保持只读。不要去掉该挂载或其 `exec` 选项，否则运行时可能启动失败。
+
 在菲比插件配置填写：
 
 ```json

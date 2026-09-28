@@ -25,4 +25,4 @@ jobs:
       - run: pip install -r dsh_bridge/requirements.txt
       - run: PYTHONPATH=. python tests/smoke_dsh.py
       - run: docker build -f deploy/Dockerfile -t phoebe-hub-dsh:test .
-      - run: docker run --rm --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m --tmpfs /home/phoebe/.cache:rw,nosuid,nodev,uid=10001,gid=10001,size=128m --memory 768m --cpus 1 -e PYTHONPATH=/app -v "$PWD/tests:/tests:ro" --entrypoint python phoebe-hub-dsh:test /tests/smoke_dsh.py
+      - run: docker run --rm --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m --tmpfs /home/phoebe/.cache:rw,exec,nosuid,nodev,uid=10001,gid=10001,size=128m --memory 768m --cpus 1 -e PYTHONPATH=/app -v "$PWD/tests:/tests:ro" --entrypoint python phoebe-hub-dsh:test /tests/smoke_dsh.py
