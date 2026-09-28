@@ -1,0 +1,49 @@
+name: phoebe-hub
+services:
+  dsh:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 768m
+    cpus: 1.0
+    environment:
+      HUB_BRIDGE_TOKEN_FILE: /run/secrets/hub_token
+      DEEPSEEK_API_KEY_FILE: /run/secrets/deepseek_key
+      DSH_MODEL: ${DSH_MODEL:?请在 .env 填写已验证可用的模型名}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}
+      HUB_DAILY_LIMIT: ${HUB_DAILY_LIMIT:-200}
+    secrets:
+      - hub_token
+      - deepseek_key
+    volumes:
+      - hub_state:/state
+    networks:
+      phoebe:
+        aliases:
+          - phoebe-hub-dsh
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "2"
+secrets:
+  hub_token:
+    file: ./secrets/hub_token.txt
+  deepseek_key:
+    file: ./secrets/deepseek_key.txt
+volumes:
+  hub_state:
+networks:
+  phoebe:
+    external: true
+    name: ${PHOEBE_NETWORK:?请填写菲比容器实际所在网络名}

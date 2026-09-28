@@ -1,0 +1,163 @@
+{
+  "enabled": {
+    "description": "启用菲比 Hub",
+    "type": "bool",
+    "default": true
+  },
+  "allowed_sessions": {
+    "description": "生效会话列表（空为本实例全部会话）",
+    "type": "list",
+    "default": [],
+    "hint": "管理员在目标会话发送“菲比 系统状态”查看完整会话标识；无需 QQ 密钥。"
+  },
+  "persona_id": {
+    "description": "人格数据分区 ID",
+    "type": "string",
+    "default": "phoebe_tsundere"
+  },
+  "bot_name": {
+    "description": "机器人称呼",
+    "type": "string",
+    "default": "菲比"
+  },
+  "tsundere_level": {
+    "description": "傲娇程度：1轻、2中、3强",
+    "type": "int",
+    "default": 3
+  },
+  "initial_affinity": {
+    "description": "新关系初始好感度",
+    "type": "int",
+    "default": 20
+  },
+  "daily_gain": {
+    "description": "每日最多加分",
+    "type": "int",
+    "default": 5
+  },
+  "gain_cooldown": {
+    "description": "加分冷却秒数",
+    "type": "int",
+    "default": 600
+  },
+  "anger_seconds": {
+    "description": "炸毛最长秒数",
+    "type": "int",
+    "default": 120
+  },
+  "anger_replies": {
+    "description": "炸毛最多回复次数（含首次）",
+    "type": "int",
+    "default": 2
+  },
+  "trigger_cooldown": {
+    "description": "妈妈反应冷却秒数",
+    "type": "int",
+    "default": 60
+  },
+  "mother_aliases": {
+    "description": "妈妈称呼别名",
+    "type": "list",
+    "default": [
+      "妈妈",
+      "妈咪",
+      "麻麻"
+    ]
+  },
+  "max_chars": {
+    "description": "AI 正文最大字数（30～100）",
+    "type": "int",
+    "default": 100
+  },
+  "history_turns": {
+    "description": "保留上下文轮数",
+    "type": "int",
+    "default": 8
+  },
+  "retention_days": {
+    "description": "短期聊天记录保留天数",
+    "type": "int",
+    "default": 7
+  },
+  "provider_id": {
+    "description": "聊天模型 Provider ID（留空用当前默认）",
+    "type": "string",
+    "default": ""
+  },
+  "engine": {
+    "description": "对话引擎",
+    "type": "string",
+    "default": "native",
+    "options": [
+      "native",
+      "dsh"
+    ]
+  },
+  "dsh_url": {
+    "description": "DSH Bridge 内网地址",
+    "type": "string",
+    "default": "http://phoebe-hub-dsh:8099"
+  },
+  "dsh_token": {
+    "description": "DSH Bridge 访问口令（不是模型 API Key）",
+    "type": "string",
+    "default": "",
+    "hint": "仅在本机填写，勿公开截图或提交 GitHub；云端 bridge 的 hub_token.txt。"
+  },
+  "dsh_timeout": {
+    "description": "DSH 请求超时秒数",
+    "type": "int",
+    "default": 55
+  },
+  "native_timeout": {
+    "description": "普通模型请求超时秒数",
+    "type": "int",
+    "default": 60
+  },
+  "native_fallback": {
+    "description": "DSH 不可用时回退到原模型",
+    "type": "bool",
+    "default": true
+  },
+  "rewrite_enabled": {
+    "description": "长回复最多请求一次压缩改写",
+    "type": "bool",
+    "default": true
+  },
+  "tool_allowlist": {
+    "description": "允许用于聊天的只读 AstrBot 工具名",
+    "type": "list",
+    "default": [
+      "web_search_tavily",
+      "tavily_extract_web_page",
+      "query_hltv"
+    ],
+    "hint": "仅添加已审查的只读查询工具；不得添加发消息、文件修改、群管等有副作用工具。"
+  },
+  "proactive_adapter": {
+    "description": "适配主动聊天插件",
+    "type": "bool",
+    "default": true
+  },
+  "meme_probability": {
+    "description": "附带一张表情包的概率（0～100）",
+    "type": "int",
+    "default": 15
+  },
+  "meme_directory": {
+    "description": "表情分类目录（空为自动读取 meme_manager）",
+    "type": "string",
+    "default": ""
+  },
+  "max_concurrent": {
+    "description": "同时生成回复的最大数量",
+    "type": "int",
+    "default": 2
+  },
+  "extra_persona": {
+    "description": "管理员补充人格（不能覆盖短句限制）",
+    "type": "string",
+    "default": "",
+    "editor_mode": true
+  }
+}
