@@ -2,6 +2,7 @@
 
 import asyncio
 import importlib.util
+import json
 import sys
 import tempfile
 import unittest
@@ -289,6 +290,8 @@ class FrameworkTests(unittest.IsolatedAsyncioTestCase):
                         tools_call_args=[{}],
                         tools_call_ids=["call1"],
                     )
+                self_context = str(kwargs["contexts"])
+                assert "Verified score 2-0." in self_context
                 return LLMResponse(
                     role="assistant",
                     completion_text="已经查到，比分是2比0。你支持的队赢了。",
@@ -411,13 +414,15 @@ class FrameworkTests(unittest.IsolatedAsyncioTestCase):
         await self.chat("我喜欢绿龙", eid="2")
         self.assertEqual(self.plugin.store.memories(self.plugin.scope(event)), [])
 
-    def search_request(self, calls, text):
+    def search_request(
+        self, calls, text, result="sweetieFox的介绍来源：https://example.org/result"
+    ):
         from astrbot.core.agent.tool import FunctionTool, ToolSet
 
         class Search(FunctionTool):
             async def call(self, context, **args):
                 calls.append(args["query"])
-                return "sweetieFox的介绍来源：https://example.org/result"
+                return result
 
         tool = Search(
             name="web_search_tavily",
@@ -429,6 +434,153 @@ class FrameworkTests(unittest.IsolatedAsyncioTestCase):
             },
         )
         return ProviderRequest(prompt=text, func_tool=ToolSet(tools=[tool]))
+
+    async def test_event_opinion_preflight_repair_has_question_evidence_and_owner_style(
+        self,
+    ):
+        from unittest.mock import AsyncMock
+
+        calls = []
+        event = Event("菲比你怎么看VCTcn2-16")
+        scope = self.plugin.scope(event)
+        self.plugin.store.status(scope)
+        self.plugin.store.db.execute(
+            "UPDATE relations SET score=120,fixed_score=120 WHERE scope=?", (scope,)
+        )
+        result = "已核实：CN四支队伍合计2胜16负。来源：https://example.org/vct"
+        self.context.output = "这次表现需要复盘。" * 20
+        self.context.llm_generate = AsyncMock(
+            return_value=SimpleNamespace(
+                completion_text="2胜16负确实难看，但还是得按具体比赛复盘，不能只看赛区标签。"
+            )
+        )
+        with patch.object(module.logger, "info") as info:
+            await self.plugin.chat(
+                event, self.search_request(calls, event.message_str, result)
+            )
+        self.assertEqual(len(calls), 1)
+        self.assertIn("VCTcn2-16", calls[0])
+        self.assertIn(result, self.context.calls[-1]["system_prompt"])
+        request = self.context.llm_generate.call_args.kwargs
+        self.assertIn(event.message_str, request["prompt"])
+        self.assertIn("2胜16负", request["prompt"])
+        self.assertIn("病娇式迷恋", request["system_prompt"])
+        self.assertIsNone(request["tools"])
+        self.assertEqual(len(event.sent), 1)
+        self.assertIn("2胜16负", event.sent[0])
+        self.assertIn("https://example.org/vct", event.sent[0])
+        self.assertNotIn("再说一遍", event.sent[0])
+        self.assertEqual(self.plugin.store.status(scope)["score"], 120)
+        self.assertEqual(self.plugin.store.status(scope)["fixed_score"], 120)
+        self.assertTrue(
+            any(
+                "rewritten" in str(c) and "native" in str(c)
+                for c in info.call_args_list
+            )
+        )
+
+    async def test_search_compression_timeout_truthful_source_single_send(self):
+        from unittest.mock import AsyncMock
+
+        calls = []
+        self.context.output = "需要复盘。" * 40
+        self.context.llm_generate = AsyncMock(
+            side_effect=TimeoutError("secret-must-not-leak")
+        )
+        event = Event("你怎么看VCTcn2-16")
+        with patch.object(module.logger, "warning") as warning:
+            await self.plugin.chat(
+                event,
+                self.search_request(
+                    calls, event.message_str, "CN合计2胜16负：https://example.org/vct"
+                ),
+            )
+        self.assertEqual(
+            event.sent, ["资料查到了，但这次回答整理失败了。\nhttps://example.org/vct"]
+        )
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(self.context.llm_generate.await_count, 1)
+        self.assertIn("rewrite_timeout", str(warning.call_args_list))
+        self.assertNotIn("secret-must-not-leak", str(warning.call_args_list))
+
+    async def test_dsh_generated_long_answer_compression_uses_same_evidence(self):
+        from unittest.mock import AsyncMock
+
+        class Bridge:
+            async def run(self, *args, **kwargs):
+                assert "CN合计2胜16负" in args[3]
+                return "这次表现需要复盘。" * 20
+
+            async def close(self):
+                pass
+
+        self.plugin.bridge = Bridge()
+        self.context.llm_generate = AsyncMock(
+            return_value=SimpleNamespace(
+                completion_text="CN这次2胜16负，确实需要认真复盘。"
+            )
+        )
+        event = Event("你怎么看VCTcn2-16")
+        calls = []
+        await self.plugin.chat(
+            event,
+            self.search_request(
+                calls, event.message_str, "CN合计2胜16负：https://example.org/vct"
+            ),
+        )
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(self.context.calls, [])
+        self.assertIn("2胜16负", self.context.llm_generate.call_args.kwargs["prompt"])
+        self.assertEqual(len(event.sent), 1)
+        self.assertIn("2胜16负", event.sent[0])
+
+    async def test_model_initiated_search_results_reach_repair_without_preflight(self):
+        from unittest.mock import AsyncMock
+
+        calls = []
+        self.context.llm_generate = AsyncMock(
+            return_value=SimpleNamespace(
+                completion_text="两次查询核对过了，结论以第二份订正资料为准。"
+            )
+        )
+
+        async def spontaneous(**kwargs):
+            tool = kwargs["tools"].tools[0]
+            await tool.gateway.execute(tool.name, {"query": "第一轮查询"})
+            await tool.gateway.execute(tool.name, {"query": "第二轮核对"})
+            return SimpleNamespace(completion_text="长回答。" * 40)
+
+        self.context.tool_loop_agent = spontaneous
+        event = Event("介绍EDG")
+        self.assertFalse(module.search_task(event.message_str)["required"])
+        await self.plugin.chat(
+            event,
+            self.search_request(
+                calls, event.message_str, "第二份订正资料：https://example.org/checked"
+            ),
+        )
+        self.assertEqual(calls, ["第一轮查询", "第二轮核对"])
+        request = self.context.llm_generate.call_args.kwargs
+        self.assertEqual(len(json.loads(request["prompt"])["本轮已查资料"]), 2)
+        self.assertIn("订正资料", event.sent[0])
+        self.assertEqual(len(event.sent), 1)
+
+    async def test_repaired_source_must_come_from_tool_results(self):
+        from unittest.mock import AsyncMock
+
+        self.context.output = "长回答。" * 40 + "https://invented.example"
+        self.context.llm_generate = AsyncMock(
+            return_value=SimpleNamespace(completion_text="核对好了。")
+        )
+        event = Event("查一查VCT赛果")
+        await self.plugin.chat(
+            event,
+            self.search_request(
+                [], event.message_str, "实际来源：https://example.org/real"
+            ),
+        )
+        self.assertIn("https://example.org/real", event.sent[0])
+        self.assertNotIn("invented.example", event.sent[0])
 
     async def test_search_followup_subject_and_dsh_fallback_use_same_results(self):
         class BrokenBridge:

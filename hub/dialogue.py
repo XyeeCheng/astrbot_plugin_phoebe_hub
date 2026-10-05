@@ -79,18 +79,38 @@ def search_task(text, previous=None):
             text,
         )
     )
+    # An opinion about an identifiable event still needs verified facts. Everyday
+    # affection and taste questions must not become automatic web searches.
+    evaluation = bool(
+        re.search(r"怎么看|看法|怎么评价|如何评价|怎么样|厉害吗|强不强|表现如何", text)
+    )
+    event_pattern = r"vct|valorant|cs2|dota2?|lpl|lck|(?<![a-z])lol(?![a-z])|无畏契约|英雄联盟|赛事|比赛|冠军赛|世界杯|欧冠"
+    event_opinion = evaluation and bool(re.search(event_pattern, text, re.I))
+    opinion_follow = bool(
+        previous
+        and re.search(event_pattern, previous["subject"], re.I)
+        and re.fullmatch(
+            r"(?:菲比[，,\s]*)?(?:你怎么看|你怎么评价|怎么看|怎么评价|如何评价|怎么样|强不强|厉害吗)[呢呀啊？?！!。\s]*",
+            text,
+        )
+    )
     follow = bool(
         previous
-        and re.search(
-            r"^(?:菲比[，,\s]*)?(?:那|他呢|她呢|这个呢|下一场|详细介绍|介绍详细|继续|再查|查一下|查一查|你查)",
-            text,
+        and (
+            opinion_follow
+            or re.search(
+                r"^(?:菲比[，,\s]*)?(?:那|他呢|她呢|这个呢|下一场|详细介绍|介绍详细|继续|再查|查一下|查一查|你查)",
+                text,
+            )
         )
     )
     topic = (previous["subject"] + "；追问：" + text) if follow else text
     return {
         "offline": offline,
         "capability": capability,
-        "required": not offline and not capability and (explicit or live or follow),
+        "required": not offline
+        and not capability
+        and (explicit or live or event_opinion or follow),
         "subject": previous["subject"] if follow else text[:500],
         "query": topic[:1200],
     }

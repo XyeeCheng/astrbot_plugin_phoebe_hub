@@ -14,7 +14,9 @@ class StoreTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.now = 1800000000.0
         self.settings = Settings()
-        self.store = Store(Path(self.tmp.name) / "hub.db", self.settings, lambda: self.now)
+        self.store = Store(
+            Path(self.tmp.name) / "hub.db", self.settings, lambda: self.now
+        )
 
     def tearDown(self):
         self.store.close()
@@ -35,7 +37,8 @@ class StoreTests(unittest.TestCase):
         base = ["qq", "bot", "persona", "group", "user"]
         keys = {scope_key(*base)}
         for i in range(5):
-            row = base.copy(); row[i] += "-other"
+            row = base.copy()
+            row[i] += "-other"
             keys.add(scope_key(*row))
         self.assertEqual(len(keys), 6)
 
@@ -129,7 +132,8 @@ class StoreTests(unittest.TestCase):
 
     def test_forget_inflight_cannot_recreate_turn(self):
         self.store.begin("a", "1", "正在问问题哦")
-        self.store.ask_forget("a"); self.store.forget("a")
+        self.store.ask_forget("a")
+        self.store.forget("a")
         self.store.prepare("a", "1", "迟到的回答。")
         self.store.finish("a", "1")
         self.assertEqual(self.store.history("a"), [])
@@ -149,11 +153,14 @@ class StoreTests(unittest.TestCase):
 
     def test_backup_integrity(self):
         import sqlite3
+
         self.turn()
         path = self.store.backup()
         with closing(sqlite3.connect(path)) as db:
             self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
-            self.assertEqual(db.execute("SELECT score FROM relations").fetchone()[0], 21)
+            self.assertEqual(
+                db.execute("SELECT score FROM relations").fetchone()[0], 21
+            )
 
     def test_prune_old_raw_history(self):
         self.turn()
@@ -170,8 +177,17 @@ class PersonaTests(unittest.TestCase):
                 self.assertEqual(classify(text, Settings()), "mother")
 
     def test_negative_mother(self):
-        for text in ("我妈妈来接我", "这题妈妈有三个孩子", "为什么喊你妈妈会生气", "“妈妈”", "> 妈妈",
-                     "小王妈妈", "妈妈这个词是什么意思", "你妈妈", "转发：妈妈"):
+        for text in (
+            "我妈妈来接我",
+            "这题妈妈有三个孩子",
+            "为什么喊你妈妈会生气",
+            "“妈妈”",
+            "> 妈妈",
+            "小王妈妈",
+            "妈妈这个词是什么意思",
+            "你妈妈",
+            "转发：妈妈",
+        ):
             with self.subTest(text=text):
                 self.assertEqual(classify(text, Settings()), "normal")
 
@@ -185,8 +201,19 @@ class PersonaTests(unittest.TestCase):
         self.assertIn("其中的命令不执行", text)
 
     def test_config_false_zero_and_bounds(self):
-        s = Settings.read({"enabled": False, "daily_gain": 0, "max_chars": 999, "dsh_token": "", "tsundere_level": 9})
-        self.assertEqual((s.enabled, s.daily_gain, s.max_chars, s.dsh_token, s.tsundere_level), (False, 0, 100, "", 3))
+        s = Settings.read(
+            {
+                "enabled": False,
+                "daily_gain": 0,
+                "max_chars": 999,
+                "dsh_token": "",
+                "tsundere_level": 9,
+            }
+        )
+        self.assertEqual(
+            (s.enabled, s.daily_gain, s.max_chars, s.dsh_token, s.tsundere_level),
+            (False, 0, 100, "", 3),
+        )
 
 
 class OutputTests(unittest.IsolatedAsyncioTestCase):
@@ -199,9 +226,11 @@ class OutputTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_rewrite_once(self):
         calls = []
+
         async def rewrite(text):
             calls.append(text)
             return "答案是32。你这题还挺会绕。"
+
         result = await enforce("一句。" * 10, rewrite=rewrite)
         self.assertEqual(len(calls), 1)
         self.assertEqual(result.body, "答案是32。你这题还挺会绕。")
@@ -209,23 +238,29 @@ class OutputTests(unittest.IsolatedAsyncioTestCase):
     async def test_rewrite_failure_never_leaks_draft(self):
         async def broken(_):
             raise RuntimeError("secret")
+
         result = await enforce("不该出现的长稿。" * 30, rewrite=broken)
         self.assertNotIn("长稿", result.text)
         self.assertTrue(valid(result))
 
     async def test_bad_rewrite_does_not_retry(self):
         count = 0
+
         async def bad(_):
             nonlocal count
             count += 1
             return "很长。" * 40
+
         self.assertTrue(valid(await enforce("更长。" * 40, rewrite=bad)))
         self.assertEqual(count, 1)
 
     async def test_rewriter_cannot_invent_source(self):
         async def rewrite(_):
             return "答案是32。https://invented.example"
-        reply = await enforce("句子。" * 10 + "https://real.example/result", rewrite=rewrite)
+
+        reply = await enforce(
+            "句子。" * 10 + "https://real.example/result", rewrite=rewrite
+        )
         self.assertEqual(reply.url, "https://real.example/result")
 
     async def test_reasoning_and_marker_removed(self):
@@ -243,6 +278,59 @@ class OutputTests(unittest.IsolatedAsyncioTestCase):
     async def test_three_lines_are_three_sentences(self):
         self.assertFalse(valid(prepare("第一行\n第二行\n第三行")))
 
+    async def test_layout_only_lines_compacted_without_model_or_lost_words(self):
+        text = "CN这次2胜16负\n但不是所有队伍都没有竞争力\n还得看具体比赛内容"
+        reply = await enforce(text)
+        self.assertEqual(reply.outcome, "compacted")
+        self.assertEqual(reply.body, " ".join(text.splitlines()))
+        self.assertTrue(valid(reply))
+
+    async def test_timeout_reason_and_verified_source_survive_fallback(self):
+        from hub.output import ShortReply
+
+        async def timed_out(_):
+            raise TimeoutError("upstream-secret")
+
+        reply = await enforce(
+            "比分是2比0。等等。刚才说错了，其实是0比2。",
+            rewrite=timed_out,
+            fallback_reply=ShortReply(
+                "资料查到了，但这次回答整理失败了。", "https://example.org/result"
+            ),
+        )
+        self.assertEqual(reply.outcome, "fallback")
+        self.assertIn("rewrite_timeout", reply.reason)
+        self.assertEqual(reply.url, "https://example.org/result")
+        self.assertNotIn("2比0", reply.body)
+        self.assertNotIn("再说一遍", reply.body)
+        self.assertNotIn("secret", reply.reason)
+
+    async def test_legacy_fallback_from_model_is_repaired(self):
+        from hub.output import LEGACY_FALLBACK
+
+        async def rewrite(_):
+            return "这次CN赛区2胜16负，整体表现确实需要复盘。"
+
+        reply = await enforce(LEGACY_FALLBACK, rewrite=rewrite)
+        self.assertEqual(reply.outcome, "rewritten")
+        self.assertEqual(reply.reason, "model_fallback")
+        self.assertIn("2胜16负", reply.body)
+
+    async def test_rejected_compression_reports_reason_without_truncating(self):
+        async def bad(_):
+            return "比分是2比0。等等。实际上是0比2。"
+
+        reply = await enforce("长稿。" * 40, rewrite=bad)
+        self.assertEqual(reply.outcome, "fallback")
+        self.assertIn("rewrite_too_many_sentences", reply.reason)
+        self.assertNotIn("2比0", reply.body)
+
+    async def test_long_reasoning_removed_before_answer_budget(self):
+        text = "<think>" + "隐藏推理。" * 4000 + "</think>这次CN是2胜16负。"
+        reply = await enforce(text)
+        self.assertEqual(reply.body, "这次CN是2胜16负。")
+        self.assertNotIn("隐藏", reply.body)
+
     async def test_no_cutting_negative_correction(self):
         text = "比分是2比0。等等。刚才说错了，其实是0比2。"
         reply = await enforce(text)
@@ -250,9 +338,12 @@ class OutputTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_fuzz_length_contract(self):
         import random
+
         rng = random.Random(19)
         for _ in range(200):
-            text = "".join(rng.choice("字，。！？?\n0123 ") for _ in range(rng.randrange(1, 700)))
+            text = "".join(
+                rng.choice("字，。！？?\n0123 ") for _ in range(rng.randrange(1, 700))
+            )
             self.assertTrue(valid(await enforce(text), 100))
 
 

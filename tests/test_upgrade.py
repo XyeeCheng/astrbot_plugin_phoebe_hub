@@ -223,6 +223,41 @@ class DialogueTests(unittest.TestCase):
         self.assertTrue(search_task("你能联网查比赛吗")["required"])
         self.assertTrue(search_task("菲比联网")["required"])
 
+    def test_event_opinions_query_facts_but_personal_questions_stay_offline(self):
+        for text in (
+            "你怎么看VCTcn2-16",
+            "菲比你怎么看VCT CN 2-16",
+            "如何评价这次世界杯",
+            "VCT强不强",
+            "CS2比赛怎么样",
+        ):
+            with self.subTest(text=text):
+                self.assertTrue(search_task(text)["required"])
+        for text in (
+            "你怎么看我",
+            "你觉得我怎么样",
+            "我厉害吗",
+            "菲比强不强",
+            "这件衣服怎么样",
+            "不用查，你怎么看VCTcn2-16",
+        ):
+            with self.subTest(text=text):
+                self.assertFalse(search_task(text)["required"])
+
+    def test_short_opinion_followup_uses_event_subject_without_hijacking_personal_question(
+        self,
+    ):
+        previous = {"subject": "VCT CN 2-16"}
+        task = search_task("你怎么看？", previous)
+        self.assertTrue(task["required"])
+        self.assertIn("VCT CN 2-16", task["query"])
+        personal = search_task("你觉得我怎么样", previous)
+        self.assertFalse(personal["required"])
+        self.assertNotIn("VCT", personal["query"])
+        self.assertFalse(
+            search_task("你怎么看", {"subject": "我喜欢的衣服"})["required"]
+        )
+
     def test_request_parts_and_original_tool_sequence_preserved(self):
         messages = [
             {"role": "assistant", "content": None, "tool_calls": [{"id": "x"}]},

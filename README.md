@@ -1,8 +1,18 @@
-# 菲比 Hub 1.1.0
+# 菲比 Hub 1.1.1
 
 AstrBot 菲比对话增强：同群接话、自然关系成长、个人偏好与情绪、联网追问、短回复。默认强傲娇，导入的专属120分和对应人格保留。要求 AstrBot ≥4.28.1、Python ≥3.11。
 
-源码仓库：[astrbot_plugin_phoebe_hub](https://github.com/XyeeCheng/astrbot_plugin_phoebe_hub)，安装包见[v1.1.0 发布页](https://github.com/XyeeCheng/astrbot_plugin_phoebe_hub/releases/tag/v1.1.0)。已有菲比实例升级前先备份，保留现有配置与Hub数据库，并同步升级DSH Bridge。
+源码仓库：[astrbot_plugin_phoebe_hub](https://github.com/XyeeCheng/astrbot_plugin_phoebe_hub)，安装包见[v1.1.1 发布页](https://github.com/XyeeCheng/astrbot_plugin_phoebe_hub/releases/tag/v1.1.1)。已有1.1.0实例按[补丁升级说明](docs/UPGRADE_1_1_1.md)更新插件，保留现有配置、数据库和已经支持工具协议2的Bridge。
+
+## 1.1.1修复
+
+“你怎么看VCTcn2-16”等赛事评价先查事实；普通私人评价不会因“怎么看/怎么样”被强制联网。赛事话题后只问“你怎么看？”可承接当前成员的有效话题。
+
+压缩长回复时同时传入原问题、本轮成功工具资料和当前关系口吻，包含模型自行决定执行的查询。只因换行超出句数时完整合并换行；不会截取前两句而丢弃后文订正。清理推理标签后再计算正文预算。
+
+失败时不再要求重复问题；已经查到资料则保留真实来源并说明回答整理失败。日志区分实际引擎、预先查询是否必需、实际工具结果、压缩结果与超时/异常类型。查过资料的回复来源来自本轮成功工具结果。
+
+本次不修改数据库结构、好感度计算或Bridge协议，120固定分数保持。见[补丁验证记录](docs/VALIDATION_1_1_1.md)。
 
 ## 这次升级
 
@@ -46,11 +56,12 @@ AstrBot 菲比对话增强：同群接话、自然关系成长、个人偏好与
 
 ## 安装与验证
 
-先按[升级说明](docs/UPGRADE_1_1.md)备份和演练。默认native复用当前模型和工具。DSH须同时更新Bridge至工具协议2；旧Bridge回退原生。含图片/音频的请求走原生。
+从1.0升级先按[迁移说明](docs/UPGRADE_1_1.md)备份和演练；从1.1.0升级按[补丁说明](docs/UPGRADE_1_1_1.md)操作。默认native复用当前模型和工具。DSH要求Bridge工具协议2；已有协议2无需重建，旧Bridge回退原生。含图片/音频的请求走原生。
 
 本地测试证明代码路径接通，不证明真实模型口吻或每个答案正确。发送函数返回与QQ实际收到分别验证，异常不自动重发。
 
 - [升级、迁移与回滚](docs/UPGRADE_1_1.md)
+- [1.1.1补丁部署与验收](docs/UPGRADE_1_1_1.md)
 - [Ubuntu部署](docs/UBUNTU.md)
 - [DSH桥接](docs/DSH.md)
 - [数据范围](docs/DATA.md)
