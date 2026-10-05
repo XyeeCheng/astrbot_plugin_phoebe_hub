@@ -1,35 +1,21 @@
-# DeepSeek Harness 接入
+# DSH工具桥接
 
-## 当前实现
+SDK/runtime固定0.1.5rc1，不自动漂移。使用sdk-minimal，禁用bash/pwsh、额外会话日志与插件清单上传；只读沙箱，每请求独立临时目录。
 
-AstrBot插件 → 带认证的HTTP Bridge → 一次性Python worker → 官方DSH SDK/runtime → 最终文本 → Hub短句出口。
+1.1.0在phoebe_time外，将当前请求存在、激活且在允许名单内的AstrBot只读工具注册给DSH。模型Key只在Bridge侧，搜索Key仍留在原插件侧。
 
-SDK与runtime固定 `0.1.5rc1`，参考的官方源码提交为 `4878cdabd87d4041bdaff61d04c966883b9fd07a`。启动检查安装版本，不自动漂移。
+## 调用流程
 
-采用 `sdk-minimal` 独立配置树，并显式禁用 `persistent-bash`、`persistent-pwsh`、额外会话日志上传及插件清单上传，沙箱策略设为只读。仅注册本项目 `phoebe_time` 工具。官方示例原配置带终端，不能去掉这些覆盖后直接暴露给群聊。
+Hub携带工具名称、说明和JSON Schema请求聊天。Bridge给本次scope/request_id生成短期随机权限，将调用排入请求内队列。Hub在同一个认证服务上轮询，使用原AstrBot执行器和禁止发送消息的事件代理执行，校验原参数定义后回传结果。AstrBot无需新增监听端口。
 
-每次请求使用独立临时DSH home/session，结束删除；对话历史由Hub提供。这样避免重复保存一份长期聊天和删除时两边不同步，代价是每次启动runtime的开销。模型名、Key、base URL在服务端配置，不接受群消息修改。
+worker只持本次调用口令，不能读取队列或提交结果，不能调用别的请求或未注册工具。结束撤销口令与排队调用；每请求最多6次，执行超时15秒，队列等待20秒，整体超时清理Linux进程组。
 
-Bridge `/health` 只代表服务存活；工具真正可调用由 `tests/smoke_dsh.py` 使用实际runtime验证。该测试通过本地模拟模型发起工具调用，检查模型只看到 `phoebe_time`、取得真实时间，再产出回答；不是实际DeepSeek线上请求。
+同请求同工具同参数缓存；失败回退原生复用已完成结果和失败状态，最终只发送一次。两端使用同一人格、群资料、个人记忆和话题。
 
-## 后续加入DSH插件
+/health应含tool_protocol: 2。旧Bridge缺协议时回退原生，不能把时间工具当成已接通搜索。健康仅表示进程存活，真实API和QQ收件分别验证。
 
-DSH原生插件和AstrBot插件不是同一种安装包。1.0.0固定加载内置时间插件，不提供群聊安装命令或任意插件自动加载。
+## 测试
 
-开发接入流程：
+test_bridge.py验证认证、HTTP工具往返、越权拒绝、口令撤销、去重和配额；smoke_dsh.py使用实际运行时查询时间；smoke_dsh_tools.py用实际运行时通过认证宿主通道调用搜索并将结果交回本地模型；smoke_astrbot.py验证实际AstrBot执行器、完整请求、回退复用与缓存。
 
-1. 确认插件适配固定DSH版本、无需Web侧边栏，并检查host代码和依赖。
-2. 在独立Bridge镜像中安装依赖，修改 `worker.patch_text()` 加载受控插件行；不要在群聊中接收文件路径或任意patch。
-3. 给新增工具定义只读范围、参数约束、超时及取消行为。需要文件修改、发送消息的插件另做权限流程，不混入普通群聊配置。
-4. 更新 `smoke_dsh.py` 的工具清单断言，加入真实插件调用的本地测试；再次核对终端和管理工具没有出现。
-5. 实际模型/接口和指定群验证通过后，再固定新版本发布。
-
-内置 `clock.mjs` 使用公开 `ToolDefinition` 注册接口，没有裸导入DSH工具包；SDK独立运行时不会向外部ESM模块暴露内嵌npm依赖，这是实测后的兼容处理。
-
-标准MCP工具也可以接入，但必须新增明确的DSH MCP配置并单独测试。既有AstrBot工具当前不经Bridge暴露；使用native模式可继续调用已允许的Tavily/HLTV工具。
-
-## 参考资料
-
-- [DSH 官方Python SDK](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/python-sdk.md)
-- [DSH sdk-minimal配置](https://github.com/deepseek-ai/deepseek-harness/blob/4878cdabd87d4041bdaff61d04c966883b9fd07a/packages/bundle/sdk-minimal/cordis.patch.yml)
-- [公开工具注册接口](https://github.com/deepseek-ai/deepseek-harness/blob/4878cdabd87d4041bdaff61d04c966883b9fd07a/packages/core/tools/src/index.ts)
+这些模拟模型测试不代表线上搜索已连通。后续工具必须已安装配置，并加入精确只读允许名单；不接受群聊提交任意插件路径、patch或管理工具。

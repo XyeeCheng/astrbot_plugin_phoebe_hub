@@ -1,7 +1,7 @@
 name: astrbot_plugin_phoebe_hub
 display_name: 菲比 Hub
-desc: 强傲娇人格、每人独立好感度、妈妈炸毛、强制短回复、明确记忆与可选 DeepSeek Harness
-version: v1.0.0
+desc: 自然关系成长、同群共享上下文、每人独立偏好与情绪、可靠联网、保留专属分数与可选 DeepSeek Harness
+version: v1.1.0
 author: XyeeCheng
 repo: https://github.com/XyeeCheng/astrbot_plugin_phoebe_hub
 astrbot_version: ">=4.28.1"

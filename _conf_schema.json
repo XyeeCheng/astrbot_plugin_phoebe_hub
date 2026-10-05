@@ -70,7 +70,7 @@
     "default": 100
   },
   "history_turns": {
-    "description": "保留上下文轮数",
+    "description": "私聊补充上下文轮数",
     "type": "int",
     "default": 8
   },
@@ -159,5 +159,27 @@
     "type": "string",
     "default": "",
     "editor_mode": true
+  },
+  "group_history_messages": {
+    "description": "同群共享上下文消息数",
+    "type": "int",
+    "default": 60,
+    "hint": "保留各条消息的作者、时间、引用；不跨群或私聊共享。"
+  },
+  "context_chars": {
+    "description": "共享上下文最多字数",
+    "type": "int",
+    "default": 12000
+  },
+  "topic_ttl": {
+    "description": "联网话题延续秒数",
+    "type": "int",
+    "default": 1200
+  },
+  "auto_memory": {
+    "description": "自动记住明确说出的普通偏好",
+    "type": "bool",
+    "default": true,
+    "hint": "每人可发送“别自动记我的偏好”；引用、猜测和敏感内容不自动保存。"
   }
 }

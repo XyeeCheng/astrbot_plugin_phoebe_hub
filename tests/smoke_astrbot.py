@@ -1,4 +1,5 @@
 """Installed-framework integration tests; no bot startup, API calls or QQ sends."""
+
 import asyncio
 import importlib.util
 import sys
@@ -17,7 +18,9 @@ from astrbot.core.message.components import Plain
 from astrbot.core.provider.entities import ProviderRequest
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("phoebe_smoke", ROOT / "main.py", submodule_search_locations=[str(ROOT)])
+spec = importlib.util.spec_from_file_location(
+    "phoebe_smoke", ROOT / "main.py", submodule_search_locations=[str(ROOT)]
+)
 module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
@@ -33,7 +36,14 @@ class Event(AstrMessageEvent):
         msg.message_str = text
         msg.message_id = eid
         msg.group_id = group
-        super().__init__(text, msg, PlatformMetadata(name="qq_official", description="mock", id="test-platform"), group)
+        super().__init__(
+            text,
+            msg,
+            PlatformMetadata(
+                name="qq_official", description="mock", id="test-platform"
+            ),
+            group,
+        )
         self.is_at_or_wake_command = wake
         self.sent = []
         self.fail_send = False
@@ -63,7 +73,9 @@ class Context(RealContext):
         return SimpleNamespace(completion_text="我看过了，关键是先把条件弄清楚。")
 
     async def send_message(self, umo, chain):
-        self.sent.append((umo, "".join(getattr(item, "text", "") for item in chain.chain)))
+        self.sent.append(
+            (umo, "".join(getattr(item, "text", "") for item in chain.chain))
+        )
 
     def get_all_stars(self):
         return self.stars
@@ -72,7 +84,9 @@ class Context(RealContext):
 class FrameworkTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.dirpatch = patch.object(StarTools, "get_data_dir", return_value=Path(self.tmp.name))
+        self.dirpatch = patch.object(
+            StarTools, "get_data_dir", return_value=Path(self.tmp.name)
+        )
         self.dirpatch.start()
         self.context = Context()
         self.plugin = module.PhoebeHub(self.context, {"meme_probability": 0})
@@ -114,12 +128,13 @@ class FrameworkTests(unittest.IsolatedAsyncioTestCase):
         event = await self.chat("你喜欢什么呀")
         self.assertEqual(event.sent, [])
 
-    async def test_group_and_user_history_isolated(self):
+    async def test_group_history_shared_with_attribution_and_other_group_isolated(self):
         await self.chat("记得刚刚的话哦")
         await self.chat("第二次说话了", eid="2")
-        self.assertEqual(len(self.context.calls[-1]["contexts"]), 2)
+        self.assertIn("记得刚刚的话哦", str(self.context.calls[-1]["contexts"]))
         await self.chat("换了一个人哦", eid="3", user="bob")
-        self.assertEqual(self.context.calls[-1]["contexts"], [])
+        self.assertIn("alice", str(self.context.calls[-1]["contexts"]))
+        self.assertIn("第二次说话了", str(self.context.calls[-1]["contexts"]))
         await self.chat("换了一个群哦", eid="4", group="another")
         self.assertEqual(self.context.calls[-1]["contexts"], [])
 
@@ -127,7 +142,10 @@ class FrameworkTests(unittest.IsolatedAsyncioTestCase):
         self.context.output = "长句。" * 40
         event = await self.chat("你解释一下呀")
         self.assertEqual(event.sent, ["我看过了，关键是先把条件弄清楚。"])
-        self.assertEqual(self.plugin.store.history(self.plugin.scope(event))[-1]["content"], event.sent[0])
+        self.assertEqual(
+            self.plugin.store.history(self.plugin.scope(event))[-1]["content"],
+            event.sent[0],
+        )
 
     async def test_uncertain_send_no_retry(self):
         event = Event("这条消息会失败")
@@ -173,21 +191,38 @@ class FrameworkTests(unittest.IsolatedAsyncioTestCase):
         await self.plugin.terminate()
         self.assertTrue(task.cancelled())
         await self.plugin.initialize()
-        self.assertEqual(self.plugin.store.status(self.plugin.scope(event))["score"], before)
+        self.assertEqual(
+            self.plugin.store.status(self.plugin.scope(event))["score"], before
+        )
         self.assertEqual(self.plugin.locks, {})
 
     async def test_proactive_adapter_final_text_and_unload_restore(self):
         class Proactive:
-            async def _generate_llm_response(self, session_id, session_config, history_messages, system_prompt, unanswered_count):
+            async def _generate_llm_response(
+                self,
+                session_id,
+                session_config,
+                history_messages,
+                system_prompt,
+                unanswered_count,
+            ):
                 self.system = system_prompt
                 return "长稿。" * 30, "motivation"
+
             async def _send_proactive_message(self, session_id, text):
                 raise AssertionError("old segmented sender must not be called")
+
         obj = Proactive()
         original = obj._generate_llm_response
-        self.context.stars = [SimpleNamespace(name="astrbot_plugin_proactive_chat", star_cls=obj, activated=True)]
+        self.context.stars = [
+            SimpleNamespace(
+                name="astrbot_plugin_proactive_chat", star_cls=obj, activated=True
+            )
+        ]
         self.plugin.adapters.install()
-        result, prompt = await obj._generate_llm_response("test", {}, [], "old persona", 0)
+        result, prompt = await obj._generate_llm_response(
+            "test", {}, [], "old persona", 0
+        )
         await obj._send_proactive_message("test", result)
         self.assertEqual(self.context.sent[0][1], result)
         self.assertIn("傲娇感强", obj.system)
@@ -196,10 +231,12 @@ class FrameworkTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_dsh_failure_falls_back_once(self):
         class Bridge:
-            async def run(self, *args):
+            async def run(self, *args, **kwargs):
                 raise module.BridgeUnavailable("unavailable")
+
             async def close(self):
                 pass
+
         self.plugin.bridge = Bridge()
         event = await self.chat("问问现在几点了")
         self.assertEqual(len(self.context.calls), 1)
@@ -211,26 +248,51 @@ class FrameworkTests(unittest.IsolatedAsyncioTestCase):
         from astrbot.core.provider.provider import Provider
         from astrbot.core.provider.entities import LLMResponse, ProviderMeta
         from astrbot.core.agent.tool import FunctionTool, ToolSet
+        from astrbot.core.agent.message import TextPart
 
-        calls = []
+        calls, provider_inputs = [], []
+
         class MockProvider(Provider):
             def __init__(self):
-                super().__init__({"id": "configured-provider", "type": "mock", "max_context_tokens": 32768}, {})
+                super().__init__(
+                    {
+                        "id": "configured-provider",
+                        "type": "mock",
+                        "max_context_tokens": 32768,
+                    },
+                    {},
+                )
                 self.set_model("mock-model")
                 self.count = 0
+
             def get_current_key(self):
                 return "local-mock"
+
             def set_key(self, key):
                 pass
+
             async def get_models(self):
                 return ["mock-model"]
+
             def meta(self):
-                return ProviderMeta(id="configured-provider", model="mock-model", type="mock")
+                return ProviderMeta(
+                    id="configured-provider", model="mock-model", type="mock"
+                )
+
             async def text_chat(self, **kwargs):
+                provider_inputs.append(kwargs)
                 self.count += 1
                 if self.count == 1:
-                    return LLMResponse(role="assistant", tools_call_name=["query_hltv"], tools_call_args=[{}], tools_call_ids=["call1"])
-                return LLMResponse(role="assistant", completion_text="已经查到，比分是2比0。你支持的队赢了。")
+                    return LLMResponse(
+                        role="assistant",
+                        tools_call_name=["query_hltv"],
+                        tools_call_args=[{}],
+                        tools_call_ids=["call1"],
+                    )
+                return LLMResponse(
+                    role="assistant",
+                    completion_text="已经查到，比分是2比0。你支持的队赢了。",
+                )
 
         class Query(FunctionTool):
             async def call(self, context, **kwargs):
@@ -238,16 +300,39 @@ class FrameworkTests(unittest.IsolatedAsyncioTestCase):
                 return "Verified score 2-0."
 
         provider = MockProvider()
+
         async def get_provider(_):
             return provider
+
         self.context.provider_manager = SimpleNamespace(get_provider_by_id=get_provider)
-        self.context.tool_loop_agent = MethodType(RealContext.tool_loop_agent, self.context)
-        req = ProviderRequest(prompt="查询比赛结果", func_tool=ToolSet(tools=[Query(name="query_hltv", description="只读比分", parameters={"type":"object", "properties":{}})]))
+        self.context.tool_loop_agent = MethodType(
+            RealContext.tool_loop_agent, self.context
+        )
+        req = ProviderRequest(
+            prompt="查询比赛结果",
+            func_tool=ToolSet(
+                tools=[
+                    Query(
+                        name="query_hltv",
+                        description="只读比分",
+                        parameters={"type": "object", "properties": {}},
+                    )
+                ]
+            ),
+        )
+        req.extra_user_content_parts = [
+            TextPart(text="同群bob说过：绿龙赢了；引用消息ID=99")
+        ]
         event = Event("查询比赛结果")
         # Direct call exposes framework validation failures instead of the user-facing fallback.
         await self.plugin._native(event, req, "用工具核对结果，回答两句。", [])
-        calls.clear(); provider.count = 0
+        calls.clear()
+        provider.count = 0
         await self.plugin.chat(event, req)
+        self.assertIn("bob", str(provider_inputs[-2]["extra_user_content_parts"]))
+        self.assertEqual(
+            req.extra_user_content_parts[0].text, "同群bob说过：绿龙赢了；引用消息ID=99"
+        )
         self.assertEqual(calls, ["alice"])
         self.assertEqual(provider.count, 2)
         self.assertEqual(event.sent, ["已经查到，比分是2比0。你支持的队赢了。"])
@@ -259,17 +344,234 @@ class FrameworkTests(unittest.IsolatedAsyncioTestCase):
             await proxy.send("uncontrolled text")
         self.assertEqual(event.sent, [])
 
+    async def test_full_request_context_system_parts_and_final_reply_persist(self):
+        from astrbot.core.agent.message import TextPart
+
+        updates = []
+
+        async def update(*args, **kwargs):
+            updates.append(kwargs["history"])
+
+        self.context.conversation_manager = SimpleNamespace(update_conversation=update)
+        req = ProviderRequest(
+            prompt="当前问题",
+            system_prompt="引用消息保留原作者。回复字数300字以内。",
+            contexts=[{"role": "user", "content": "已有原生上下文"}],
+            extra_user_content_parts=[TextPart(text="同群张三：昨天支持绿龙")],
+        )
+        req.conversation = SimpleNamespace(cid="c", history="[]")
+        event = Event("当前问题")
+        await self.plugin.chat(event, req)
+        self.assertIn("张三", self.context.calls[-1]["prompt"])
+        self.assertIn("引用消息", self.context.calls[-1]["system_prompt"])
+        self.assertNotIn("300字", self.context.calls[-1]["system_prompt"])
+        self.assertIn("已有原生上下文", str(self.context.calls[-1]["contexts"]))
+        self.assertEqual(updates[0][-1]["content"], event.sent[0])
+
+    async def test_unwoken_public_message_available_to_another_speaker(self):
+        event = Event("绿龙今天输了", user="bob", wake=False)
+        await self.plugin.capture_public(event)
+        await self.chat("刚才谁说绿龙输了", eid="2")
+        contexts = str(self.context.calls[-1]["contexts"])
+        self.assertIn("bob", contexts)
+        self.assertIn("绿龙今天输了", contexts)
+        self.assertEqual(event.sent, [])
+
+    async def test_relation_preferences_and_moods_do_not_cross_speakers(self):
+        await self.chat("我喜欢绿龙")
+        await self.chat("妈妈", eid="2")
+        other = await self.chat("我是谁呀", eid="3", user="bob")
+        system = self.context.calls[-1]["system_prompt"]
+        self.assertNotIn("我喜欢绿龙", system)
+        self.assertNotIn("临时情绪：angry", system)
+        self.assertEqual(
+            self.plugin.store.status(self.plugin.scope(other))["score"], 21
+        )
+
+    async def test_scope_stable_across_transport_session_prefix_changes(self):
+        event = Event("有一个问题")
+        scope = self.plugin.scope(event)
+        event.unified_msg_origin = "test-platform:GroupMessage:test-group_alice"
+        self.assertEqual(self.plugin.scope(event), scope)
+
+    async def test_send_error_does_not_gain(self):
+        event = Event("我喜欢绿龙")
+        event.fail_send = True
+        await self.plugin.chat(event, ProviderRequest(prompt=event.message_str))
+        scope = self.plugin.scope(event)
+        self.assertEqual(self.plugin.store.status(scope)["score"], 20)
+        self.assertEqual(self.plugin.store.memories(scope), [])
+        self.assertEqual(self.plugin.store.history(scope), [])
+
+    async def test_compact_commands_and_memory_opt_out(self):
+        event = Event("菲比别自动记我的偏好")
+        await self.plugin.commands(event)
+        self.assertTrue(event.sent)
+        self.assertFalse(self.plugin.store.automatic(self.plugin.scope(event)))
+        await self.chat("我喜欢绿龙", eid="2")
+        self.assertEqual(self.plugin.store.memories(self.plugin.scope(event)), [])
+
+    def search_request(self, calls, text):
+        from astrbot.core.agent.tool import FunctionTool, ToolSet
+
+        class Search(FunctionTool):
+            async def call(self, context, **args):
+                calls.append(args["query"])
+                return "sweetieFox的介绍来源：https://example.org/result"
+
+        tool = Search(
+            name="web_search_tavily",
+            description="只读搜索",
+            parameters={
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
+        )
+        return ProviderRequest(prompt=text, func_tool=ToolSet(tools=[tool]))
+
+    async def test_search_followup_subject_and_dsh_fallback_use_same_results(self):
+        class BrokenBridge:
+            async def run(self, *args, **kwargs):
+                result = await kwargs["tool_executor"](
+                    "web_search_tavily", {"query": "额外查询"}
+                )
+                assert not result.isError
+                raise module.BridgeUnavailable("unavailable")
+
+            async def close(self):
+                pass
+
+        calls = []
+        await self.chat("介绍sweetieFox")
+        self.plugin.bridge = BrokenBridge()
+        event = Event("菲比你查一查", eid="2")
+        await self.plugin.chat(event, self.search_request(calls, event.message_str))
+        self.assertEqual(len(calls), 2)
+        self.assertIn("sweetieFox", calls[0])
+        self.assertIn("额外查询", self.context.calls[-1]["system_prompt"])
+        self.assertIn(
+            "https://example.org/result", self.context.calls[-1]["system_prompt"]
+        )
+        self.assertEqual(len(event.sent), 1)
+        self.plugin.bridge = None
+        follow = Event("详细介绍一下", eid="3")
+        await self.plugin.chat(follow, self.search_request(calls, follow.message_str))
+        self.assertIn("sweetieFox", calls[-1])
+
+    async def test_explicit_offline_and_capability_do_not_call_search(self):
+        calls = []
+        for eid, text in (("1", "不要联网，介绍一下"), ("2", "你能联网吗")):
+            event = Event(text, eid=eid)
+            await self.plugin.chat(event, self.search_request(calls, text))
+        self.assertEqual(calls, [])
+        self.assertIn("可以查", event.sent[0])
+
+    async def test_same_tool_arguments_cache_and_revocation(self):
+        calls = []
+        event = Event("搜索比赛")
+        gateway = module.ToolGateway(
+            self.context,
+            event,
+            self.search_request(calls, event.message_str),
+            self.plugin.settings,
+        )
+        await asyncio.gather(
+            gateway.execute("web_search_tavily", {"query": "比赛"}),
+            gateway.execute("web_search_tavily", {"query": "比赛"}),
+        )
+        self.assertEqual(calls, ["比赛"])
+        gateway.closed = True
+        with self.assertRaises(ValueError):
+            await gateway.execute("web_search_tavily", {"query": "比赛"})
+
+    async def test_failed_search_cannot_be_reported_as_success(self):
+        from astrbot.core.agent.tool import FunctionTool, ToolSet
+
+        class BrokenSearch(FunctionTool):
+            async def call(self, context, **args):
+                raise RuntimeError("upstream failed")
+
+        tool = BrokenSearch(
+            name="web_search_tavily",
+            description="search",
+            parameters={
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
+        )
+        self.context.output = "我查到最新结果了，肯定是2比0。"
+        event = Event("你查一查今天赛果")
+        await self.plugin.chat(
+            event,
+            ProviderRequest(prompt=event.message_str, func_tool=ToolSet(tools=[tool])),
+        )
+        self.assertIn("没拿到", event.sent[0])
+        self.assertNotIn("2比0", event.sent[0])
+
+    async def test_smalltalk_followup_does_not_randomly_search(self):
+        await self.chat("你喜欢我吗")
+        calls = []
+        event = Event("那他呢", eid="2")
+        await self.plugin.chat(event, self.search_request(calls, event.message_str))
+        self.assertEqual(calls, [])
+
+    async def test_explicit_new_topic_clears_old_search_topic(self):
+        await self.chat("介绍sweetieFox")
+        await self.chat("我喜欢绿龙", eid="2")
+        calls = []
+        event = Event("那他呢", eid="3")
+        await self.plugin.chat(event, self.search_request(calls, event.message_str))
+        self.assertEqual(calls, [])
+
+    async def test_valorant_cannot_use_hltv_even_on_followup(self):
+        from astrbot.core.agent.tool import FunctionTool
+
+        self.plugin.store.set_topic(
+            self.plugin.scope(Event("VALORANT赛程")),
+            {"subject": "VALORANT赛程", "query": "VALORANT赛程"},
+            [],
+        )
+        calls = []
+        req = self.search_request(calls, "下一场呢")
+        req.func_tool.add_tool(
+            FunctionTool(
+                name="query_hltv",
+                description="CS only",
+                parameters={"type": "object", "properties": {}},
+            )
+        )
+        event = Event("下一场呢")
+        await self.plugin.chat(event, req)
+        self.assertNotIn(
+            "query_hltv", [t.name for t in self.context.calls[-1]["tools"].tools]
+        )
+
+    async def test_private_chat_not_shared_with_group_or_other_user(self):
+        event = Event("我喜欢绿龙", user="alice")
+        event.message_obj.type = MessageType.FRIEND_MESSAGE
+        event.unified_msg_origin = "test-platform:FriendMessage:alice"
+        await self.plugin.chat(event, ProviderRequest(prompt=event.message_str))
+        await self.chat("我是谁呀", user="bob", eid="2")
+        self.assertNotIn("我喜欢绿龙", str(self.context.calls[-1]["contexts"]))
+        self.assertNotIn("我喜欢绿龙", self.context.calls[-1]["system_prompt"])
+
     async def test_meme_one_image_and_no_text_mutation(self):
         folder = Path(self.tmp.name) / "memes" / "angry"
         folder.mkdir(parents=True)
         (folder / "one.png").write_bytes(b"fixture")
-        self.plugin.settings = module.Settings.read({"meme_probability": 100, "meme_directory": str(folder.parent)})
+        self.plugin.settings = module.Settings.read(
+            {"meme_probability": 100, "meme_directory": str(folder.parent)}
+        )
         event = Event("妈妈")
         chain_lengths = []
         original = event.send
+
         async def capture(chain):
             chain_lengths.append(len(chain.chain))
             await original(chain)
+
         event.send = capture
         await self.plugin.chat(event, ProviderRequest(prompt="妈妈"))
         self.assertEqual(chain_lengths, [2])
@@ -279,22 +581,41 @@ class FrameworkTests(unittest.IsolatedAsyncioTestCase):
         class Bad:
             async def _generate_llm_response(self, x):
                 pass
+
             async def _send_proactive_message(self, x):
                 pass
-        self.context.stars = [SimpleNamespace(name="astrbot_plugin_proactive_chat", star_cls=Bad(), activated=True)]
+
+        self.context.stars = [
+            SimpleNamespace(
+                name="astrbot_plugin_proactive_chat", star_cls=Bad(), activated=True
+            )
+        ]
         self.plugin.adapters.install()
         self.assertEqual(self.plugin.adapters.proactive_status, "incompatible")
         self.assertEqual(self.plugin.adapters.patches, [])
 
     async def test_proactive_unloaded_instance_released(self):
         class Good:
-            async def _generate_llm_response(self, session_id, session_config, history_messages, system_prompt, unanswered_count):
+            async def _generate_llm_response(
+                self,
+                session_id,
+                session_config,
+                history_messages,
+                system_prompt,
+                unanswered_count,
+            ):
                 return "你好。", "hi"
+
             async def _send_proactive_message(self, session_id, text):
                 pass
+
         obj = Good()
         original = obj._send_proactive_message
-        self.context.stars = [SimpleNamespace(name="astrbot_plugin_proactive_chat", star_cls=obj, activated=True)]
+        self.context.stars = [
+            SimpleNamespace(
+                name="astrbot_plugin_proactive_chat", star_cls=obj, activated=True
+            )
+        ]
         self.plugin.adapters.install()
         self.context.stars = []
         self.plugin.adapters.install()
